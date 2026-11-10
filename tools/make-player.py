@@ -10,7 +10,17 @@
   - 双击文件名用系统播放器打开
 """
 import json
+import subprocess
 from pathlib import Path
+
+def adur(p):
+    """读音频时长（秒），读不到返回 0"""
+    o = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+                        '-of', 'default=nw=1:nk=1', str(p)], capture_output=True, text=True)
+    try:
+        return round(float(o.stdout.strip()), 2)
+    except ValueError:
+        return 0.0
 
 SRC = Path(__file__).resolve().parent.parent
 ROOT = SRC.parent / 'video-batch'
@@ -42,6 +52,8 @@ def main():
             'shot': f'../../video-batch/{d}/assets/repo.png',
             'copy': f'发布包/{it["i"]+1:03d}-{d}.md',
             'url': c['url'],
+            'voice': adur(ROOT / d / 'audio/vo1.mp3'),
+            'video': 18.0,
         })
 
     html = '''<!doctype html>
@@ -85,7 +97,7 @@ button.on{background:#5fa8b2;border-color:#5fa8b2;color:#04202a;font-weight:600}
 <div id="list">
   <div class="hdr">
     <b>100 条开源项目短片</b>
-    <div class="s">2026-10 至今 · 1000+ Star · 点击左侧任意一条播放</div>
+    <div class="s" id="stat">2026-10 至今 · 1000+ Star · 点击左侧任意一条播放</div>
   </div>
   <div id="rows"></div>
 </div>
@@ -124,8 +136,12 @@ ITEMS.forEach((it, i) => {
   const div = document.createElement('div');
   div.className = 'row';
   div.dataset.i = i;
+  const vok = it.voice >= 15.5 && it.voice <= 18.6;
+  const vtxt = it.voice ? it.voice.toFixed(1) + 's' : '无配音';
   div.innerHTML = `<span class="no">${String(it.n).padStart(3,'0')}</span>
-    <span><span class="t">${it.title}</span><span class="m">${it.stars}★ · ${it.repo}</span></span>`;
+    <span style="flex:1"><span class="t">${it.title}</span>
+      <span class="m">${it.stars}★ · ${it.repo}
+        <span class="vbadge ${vok ? 'vok' : 'vbad'}">🔊 ${vtxt}</span></span></span>`;
   div.onclick = () => show(i);
   rows.appendChild(div);
 });
@@ -136,7 +152,10 @@ function show(i) {
   v.src = blank ? it.blank : it.file;
   v.load();
   titleEl.textContent = it.title;
-  metaEl.innerHTML = `${it.repo} · ${it.stars}★ · <a href="${it.url}" target="_blank">${it.url}</a>`;
+  const vok = it.voice >= 15.5 && it.voice <= 18.6;
+  metaEl.innerHTML = `${it.repo} · ${it.stars}★ · `
+    + `<span class="vbadge ${vok ? 'vok' : 'vbad'}">🔊 配音 ${it.voice ? it.voice.toFixed(2) + 's' : '缺失'}`
+    + ` / 片长 ${it.video}s</span> · <a href="${it.url}" target="_blank">${it.url}</a>`;
   [...rows.children].forEach((r, k) => r.classList.toggle('on', k === cur));
   rows.children[cur].scrollIntoView({block:'nearest'});
 }
@@ -167,6 +186,15 @@ document.addEventListener('keydown', e => {
   if (e.code === 'ArrowRight') show(cur + 1);
   if (e.code === 'Escape') document.getElementById('copy').style.display = 'none';
 });
+
+// 汇总配音合格率
+(() => {
+  const bad = ITEMS.filter(x => !(x.voice >= 15.5 && x.voice <= 18.6)).length;
+  const el = document.getElementById('stat');
+  const base = '2026-10 至今 · 1000+ Star · 点击左侧任意一条播放';
+  el.innerHTML = base + `　｜　配音合格 <b style="color:#5be06a">${ITEMS.length - bad}</b>/${ITEMS.length}`
+    + (bad ? `　<b style="color:#ff8b6a">${bad} 条待修</b>` : '');
+})();
 
 show(0);
 </script>
