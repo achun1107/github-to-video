@@ -1,0 +1,19 @@
+# 忽略渲染产物与本地数据
+_repos/
+renders/
+review/
+out/
+logs/
+assets/repo.png
+audio/bgm/*.wav
+audio/vo*.mp3
+audio/vo*.srt
+audio/score.wav
+node_modules/
+*.log
+
+# 字体不入库（43MB，用 engine/get_fonts.py 下载）
+engine/fonts/
+
+# 保留样例
+!examples/samples/*.mp4
