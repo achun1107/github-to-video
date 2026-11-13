@@ -37,9 +37,8 @@ def main():
     ok &= step('2/8 建工程（content+film+文案骨架）', ['tools/batch-build.py', '--limit', limit, '--root', str(ROOT)])
     ok &= step('3/8 补齐运行时依赖', ['tools/batch-deps.py', '--limit', limit])
     ok &= step('4/8 截图仓库页', ['tools/batch-shot.py', '--limit', limit], timeout=7200)
-    ok &= step('5/8 合成配音', ['tools/batch-tts3.py', '--limit', limit], timeout=7200)
+    ok &= step('5/8 合成配音', ['tools/batch-tts.py', '--limit', limit], timeout=7200)
     ok &= step('6/8 渲染 + 混音', ['tools/batch-render.py', '--limit', limit], timeout=14400)
-    ok &= step('6.5/8 配音覆盖检查', ['tools/check-voice.py'], timeout=3600)
     ok &= step('7/8 生成发布包', ['tools/batch-copy.py', '--limit', limit])
     ok &= step('8/8 总览页 + 验收报告', ['tools/make-gallery.py'])
 

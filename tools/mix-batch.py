@@ -18,7 +18,17 @@ def dur(p):
 
 
 def main():
-    proj = Path(sys.argv[1] if len(sys.argv) > 1 else '.').resolve()
+    argv = [x for x in sys.argv[1:] if not x.startswith('--')]
+    proj = Path(argv[0] if argv else '.').resolve()
+    def opt(name, default):
+        if name in sys.argv:
+            try:
+                return float(sys.argv[sys.argv.index(name) + 1])
+            except (IndexError, ValueError):
+                return default
+        return default
+    music_gain = opt('--music-gain', 0.14)
+    vo_gain = opt('--vo-gain', 2.6)
     raw = proj / 'renders/raw.mp4'
     if not raw.exists():
         sys.exit('no raw.mp4')
@@ -55,7 +65,7 @@ def main():
     duck = ('[mu0][voS]sidechaincompress=threshold=0.010:ratio=12:attack=4:release=320:level_sc=1[mu1];'
             if vo_i is not None else '[mu0]anull[mu1];')
     f.append(f'[1:a]aresample=48000,atrim=0:{end:.3f},asetpts=N/SR/TB,'
-             f'volume=0.20,afade=t=in:st=0:d=0.25,afade=t=out:st={end-0.7:.3f}:d=0.7,'
+             f'volume={music_gain},afade=t=in:st=0:d=0.25,afade=t=out:st={end-0.7:.3f}:d=0.7,'
              f'pan=stereo|c0=c0|c1=c0[mu0];{duck}'
              f'[mu1]anull[mus]')
 

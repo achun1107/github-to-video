@@ -41,13 +41,11 @@ const C = {
 const DUR = 18.0;
 const T = { head: 0.15, c1: 1.15, c2: 4.05, c3: 8.30, c4: 12.60, c5: 16.6, outro: 16.8 };
 
-const SUBS = [
+/* 说明条 = 解说原句（由 vo1.srt 注入 window.VO_SUBS）
+ * 绝不另写一套文案，否则画面上显示的和观众听到的是两套话。 */
+const SUBS = (window.VO_SUBS && window.VO_SUBS.length) ? window.VO_SUBS : [
   { a: 0.70,  b: 2.13,  zh: HOOK },
   { a: 2.08,  b: 4.05,  zh: 'GitHub 上 ' + STARS + ' 个 Star' },
-  { a: 4.00,  b: 8.28,  zh: CREATED.slice(5) + ' 才上线 · ' + LANG },
-  { a: 8.22,  b: 12.58, zh: '拿走就能用' },
-  { a: 12.52, b: 16.55, zh: REPO_NAME + ' GitHub 搜得到' },
-  
 ];
 
 const pad2 = n => String(n).padStart(2, '0');
@@ -160,44 +158,86 @@ const KEYWORDS = (R.keywords && R.keywords.length) ? R.keywords : [STARS, FORKS,
 const KEY_RE = new RegExp('(' + KEYWORDS.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'g');
 
 function captionChip(fr, str, a) {
-  const size = RCHIP.size || 56;
+  const base = RCHIP.size || 56;
   const padX = RCHIP.padX || 32;
-  const parts = [];
-  let last = 0, m;
-  KEY_RE.lastIndex = 0;
-  while ((m = KEY_RE.exec(str))) {
-    if (m.index > last) parts.push([str.slice(last, m.index), false]);
-    parts.push([m[0], true]);
-    last = m.index + m[0].length;
+  const maxW = RCHIP.maxWidth || 880;
+  const y0 = RCHIP.y || 1520;
+
+  /* 先把句子按标点切成小段，再贪心装行（最多 2 行） */
+  const tokens = str.match(/[^，。、；：！？,.;:!?]+[，。、；：！？,.;:!?]?/g) || [str];
+  const sizeOf = (t, sz) => fr.measure(t, { font: 'sans', size: sz });
+
+  let size = base;
+  let lines = null;
+  for (let attempt = 0; attempt < 12; attempt++) {
+    lines = [];
+    let cur = '';
+    for (const t of tokens) {
+      const next = cur + t;
+      if (cur && sizeOf(next, size) > maxW) { lines.push(cur); cur = t; }
+      else cur = next;
+    }
+    if (cur) lines.push(cur);
+    if (lines.length <= 2) break;
+    size -= 4;
+    if (size < 26) { size = 26; break; }
   }
-  if (last < str.length) parts.push([str.slice(last), false]);
-  if (!parts.length) parts.push([str, false]);
-  let s2 = size;
-  const width = sz => parts.reduce((n, p) => n + fr.measure(p[0], { font: 'sans', size: sz }), 0);
-  let total = width(s2);
-  while (total > (RCHIP.maxWidth || 880) && s2 > 34) { s2 -= 2; total = width(s2); }
-  const w = total + padX * 2, h = RCHIP.h || 100;
-  const y = RCHIP.y || 1520;
-  fr.rect(W / 2 - w / 2, y - h / 2, w, h, { r: RCHIP.radius || 14, fill: RCHIP.bg || 'rgba(18,18,22,0.80)', a: 0.92 * a });
-  let cx = W / 2 - total / 2;
-  parts.forEach(p => {
-    const sw = fr.measure(p[0], { font: 'sans', size: s2 });
-    fr.text(p[0], cx + sw / 2, y, {
-      font: 'sans', size: s2, a,
-      color: p[1] ? (RCHIP.keyColor || C.stroke) : (RCHIP.text || C.white),
-      shadow: 0.35, shadowBlur: 8, shadowY: 2,
+  if (lines.length > 2) {
+    /* 仍超两行：硬折成两行 */
+    const full = str;
+    let cut = Math.ceil(full.length / 2);
+    lines = [full.slice(0, cut), full.slice(cut)];
+  }
+
+  const lineH = Math.round(size * 1.42);
+  const h = lines.length * lineH + Math.round(size * 0.72);
+  const maxLineW = Math.max(...lines.map(l => sizeOf(l, size)));
+  const w = Math.min(maxW + padX * 2, maxLineW + padX * 2);
+  const top = y0 - h / 2;
+
+  fr.rect(W / 2 - w / 2, top, w, h, {
+    r: RCHIP.radius || 14, fill: RCHIP.bg || 'rgba(18,18,22,0.80)', a: 0.92 * a,
+  });
+
+  lines.forEach((line, li) => {
+    const cy = top + Math.round(size * 0.36) + li * lineH + lineH / 2;
+    /* 逐段上色（关键词橙） */
+    const parts = [];
+    let last = 0, m;
+    KEY_RE.lastIndex = 0;
+    while ((m = KEY_RE.exec(line))) {
+      if (m.index > last) parts.push([line.slice(last, m.index), false]);
+      parts.push([m[0], true]);
+      last = m.index + m[0].length;
+    }
+    if (last < line.length) parts.push([line.slice(last), false]);
+    if (!parts.length) parts.push([line, false]);
+
+    const total = parts.reduce((n, p) => n + fr.measure(p[0], { font: 'sans', size }), 0);
+    let cx = W / 2 - total / 2;
+    parts.forEach(p => {
+      const pw = fr.measure(p[0], { font: 'sans', size });
+      fr.text(p[0], cx + pw / 2, cy, {
+        font: 'sans', size, a,
+        color: p[1] ? (RCHIP.keyColor || C.stroke) : (RCHIP.text || C.white),
+        shadow: 0.35, shadowBlur: 8, shadowY: 2,
+      });
+      cx += pw;
     });
-    cx += sw;
   });
 }
 
 function subtitles(fr, t) {
-  const cand = SUBS.filter(x => t >= x.a - 0.05 && t <= x.b + 0.25);
-  const s = cand.length ? cand[cand.length - 1] : null;
-  if (!s) return;
-  const a = ss(t, s.a, s.a + 0.18) * (1 - ss(t, s.b, s.b + 0.1));
-  if (a <= 0.003) return;
-  captionChip(fr, s.zh, a);
+  /* 不能在交叠窗里简单取"最新一条"——新句的淡入可能还没开始，
+   * 会露出空帧（实测 1.5s 处字幕消失）。改成取不透明度最高的那条。 */
+  let best = null, bestA = 0;
+  for (const x of SUBS) {
+    if (t < x.a - 0.05 || t > x.b + 0.25) continue;
+    const a = ss(t, x.a, x.a + 0.18) * (1 - ss(t, x.b, x.b + 0.1));
+    if (a > bestA) { bestA = a; best = x; }
+  }
+  if (!best || bestA <= 0.003) return;
+  captionChip(fr, best.zh, bestA);
 }
 
 /* ================= 卡片 ================= */

@@ -198,6 +198,70 @@ python tools/mix-batch.py <工程目录>
 
 ---
 
+## 七之二、交付与发布（做完片子之后）
+
+生成一堆 mp4 只是半成品，**交付物必须收敛到一个入口**，否则用的人永远找不到。
+
+### 三条铁律（实战踩出来的）
+
+1. **单一入口**：一个文件夹装下全部，名字以 `00-` 开头保证排序最前
+2. **自解释命名**：`001-Gathin23-cleanyourtv-带配乐.mp4`，不看文档也知道是哪条、什么版本
+3. **平铺**：层深 ≤ 2，不要 `repo/renders/final.mp4` 这种
+
+### 交付目录结构
+
+```bash
+python tools/build-delivery.py     # 视频 + 文案 + 播放器收进 00-交付-xxx/
+python tools/build-mobile-pack.py  # 手机发布包：mp4 + txt 成对，直接微信发手机
+```
+
+```
+00-交付-100条视频/
+├── ▶ 双击这里打开播放器.bat
+├── ▶ 播放器.html
+├── 说明-先看这个.md
+├── videos/        200 个 mp4（硬链接，不占额外空间）
+├── 文案/          100 个 md
+└── 手机发布包/     mp4 + txt 成对（发抖音用这个）
+```
+
+视频用 **硬链接** 而不是复制：`os.link()`，同磁盘零额外占用。
+
+### 手机发布包
+
+```bash
+python tools/build-mobile-pack.py
+```
+
+- 每条 `<编号>-<作者>-<仓库>.txt`：**正文即解说原文**，按句断行，整块粘贴到抖音描述框
+- `全部文案-一次复制.txt`：100 条合集
+- 传手机：微信「文件传输助手」，一次 3–5 条
+
+### 发布前必查
+
+```bash
+python tools/check-subs-sync.py      # 画面字幕 = 解说（源数据比对）
+python tools/check-sub-presence.py   # 逐条抽帧，确认字幕没丢
+python tools/check-voice.py          # 0–18s 无静音断档
+```
+
+三条全绿再发。实测这套检查抓到过两条真 bug：长句超出卡片、交叠窗空帧。
+
+### 内容风险自查
+
+短视频平台对几类内容敏感，发布前先扫一遍仓库名：
+
+| 类型 | 关键词 | 处理 |
+|---|---|---|
+| 成人 | nsfw / hentai / 18+ | 不发，或换项目 |
+| 漏洞利用 | poc / exploit / shell | 换 |
+| 破解 | crack / unlock / keygen | 换 |
+| 去广告 | adblock / ad-cleaner | 换或改说法 |
+
+`python tools/rebuild-slot.py --slot 7 --repo owner/safe-repo` 可以把某一条换成候选池里的安全项目，重新出片。
+
+---
+
 ## 八、验收
 
 ```bash
