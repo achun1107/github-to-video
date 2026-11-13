@@ -17,3 +17,7 @@ engine/fonts/
 
 # ä¿ç•™æ ·ä¾‹
 !examples/samples/*.mp4
+
+# Python »º´æ
+__pycache__/
+*.pyc
