@@ -27,7 +27,7 @@ def main():
             except (IndexError, ValueError):
                 return default
         return default
-    music_gain = opt('--music-gain', 0.95)
+    music_gain = opt('--music-gain', 0.84)
     vo_gain = opt('--vo-gain', 2.6)
 
     def optp(name, default):

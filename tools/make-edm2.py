@@ -117,6 +117,27 @@ def bass_note(freq, dur):
     return np.tanh(x * 1.5) * np.exp(-np.arange(n) / (0.11 * SR)) * 0.9
 
 
+def click(dur=0.014):
+    """极短高频 click（2–7kHz）：手机外放靠它听出"咔"的打击感"""
+    n = int(dur * SR)
+    t = np.arange(n) / SR
+    x = _filt(rng.standard_normal(n), 'bp', (2000, 7000))
+    return x * np.exp(-t / 0.0022) * 0.9
+
+
+def sub808(freq, dur):
+    """持续次低频：正弦 + 轻微谐波，整段持续，靠侧链让位给底鼓"""
+    n = int(dur * SR)
+    if n <= 0:
+        return np.zeros(0)
+    t = np.arange(n) / SR
+    base = np.sin(2 * np.pi * freq * t)
+    harm = np.sin(2 * np.pi * freq * 2 * t) * 0.18
+    env = np.minimum(1, np.arange(n) / (0.08 * SR))
+    tail = np.minimum(1, (n - np.arange(n)) / (0.12 * SR))
+    return (base + harm) * env * tail * 0.9
+
+
 def pad(freqs, dur, bright=3000):
     """持续 pad：4 个失谐锯齿平均，缓慢起音（不归一化到很小）"""
     n = int(dur * SR)
@@ -143,7 +164,7 @@ def pluck(freq, dur=0.26):
         k = i / n
         cut = min(6500 * np.exp(-k * 5.0) + 800, 16000)
         out[i:i + blk] = _filt(raw[i:i + blk], 'lp', cut)
-    return out * np.exp(-np.arange(n) / (0.12 * SR)) * 1.0
+    return out * np.exp(-np.arange(n) / (0.075 * SR)) * 1.0
 
 
 def stab(freqs, dur=0.20):
@@ -153,7 +174,7 @@ def stab(freqs, dur=0.20):
     for f in freqs:
         x += saw(f * 1.003, n) + saw(f * 0.997, n)
     x = _filt(x, 'bp', (500, 7500))
-    return x * np.exp(-t / 0.07) * 0.5
+    return x * np.exp(-t / 0.045) * 0.5
 
 
 def haas(x, ms=11):
@@ -201,12 +222,16 @@ def main():
     if PR:
         bpm = float(PR['bpm'])
     DG, LG, BG, SUB = opt('--dg', 1.5), opt('--lg', 2.6), opt('--bg', 1.2), opt('--sub', 0.7)
+    SUBG = opt('--subg', 1.0)      # 持续次低频层增益
+    CLICK = opt('--click', 0.0)    # 打击点层增益（提手机外放的瞬态清晰度）
+    PADG = opt('--padg', 0.62)     # pad 铺底增益（过高会压平瞬态清晰度）
 
     beat = 60.0 / bpm
     offset = at % beat
     n = int(dur * SR)
     drums = np.zeros(n)
     low = np.zeros(n)
+    sub_low = np.zeros(n)
     bright_l = np.zeros(n)
     bright_r = np.zeros(n)
     kick_at = []
@@ -223,6 +248,8 @@ def main():
         t0 = offset + k * beat
         if 0 <= t0 <= dur:
             add(drums, kick(), t0, 1.0)
+            if CLICK > 0:
+                add(drums, click(), t0, CLICK)
             kick_at.append(t0)
     step = beat / 4
     for k in range(-8, int(dur / step) + 8):
@@ -236,6 +263,8 @@ def main():
         if 1.0 <= t0 <= dur:
             add(drums, snare(), t0, 0.5)
             add(drums, clap(), t0, 0.9)
+            if CLICK > 0:
+                add(drums, click(0.010), t0, CLICK * 0.6)
 
     # 和声/旋律
     chords = PR['chords'] if PR else [(220.0, [220.0, 261.6, 329.6]),
@@ -255,13 +284,17 @@ def main():
         for s_ in range(8):
             tb = b0 + (s_ + 0.5) * beat / 2
             if 0.5 <= tb <= dur:
-                add(low, bass_note(root * (2 if s_ % 4 == 3 else 1), beat / 2 * 0.8), tb, 0.6 * lvl)
+                add(low, bass_note(root * (2 if s_ % 4 == 3 else 1), beat * 1.6), tb, 0.55 * lvl)
+
+        sb = sub808(root / 2, min(bar, dur - b0 + 0.05))
+        if len(sb):
+            add(sub_low, sb, b0, SUBG * min(lvl, 1.2))
 
         pd = pad(triad, min(bar * 2, dur - b0 + 0.05), bright=PADBRIGHT)
         if len(pd):
             L, R = haas(pd, 13)
-            add(bright_l, L, b0, 1.0 * min(lvl, 1.2))
-            add(bright_r, R, b0, 1.0 * min(lvl, 1.2))
+            add(bright_l, L, b0, PADG * min(lvl, 1.2))
+            add(bright_r, R, b0, PADG * min(lvl, 1.2))
 
         if b0 >= 4.0:
             for s_ in range(16):
@@ -313,8 +346,8 @@ def main():
         if ln > 0:
             sc[i:i + ln] = np.minimum(sc[i:i + ln], 1 - 0.40 * np.exp(-np.arange(ln) / (0.05 * SR)))
     duck = drums * DG + sub
-    m_l = duck + (low * LG + bright_l * BG) * sc
-    m_r = duck + (low * LG + bright_r * BG) * sc
+    m_l = duck + (low * LG + sub_low * SUBG + bright_l * BG) * sc
+    m_r = duck + (low * LG + sub_low * SUBG + bright_r * BG) * sc
 
     def eq(x):
         x = _filt(x, 'hp', 35)
@@ -322,9 +355,16 @@ def main():
 
     m_l, m_r = eq(m_l), eq(m_r)
 
-    peak = max(np.abs(m_l).max(), np.abs(m_r).max(), 1e-9)
-    k = 0.95 / peak
-    m_l, m_r = np.tanh(m_l * k), np.tanh(m_r * k)
+    # 按 RMS 归一（不是峰值）——峰值归一化会把新增的瞬态层"吃掉"，
+    # 导致 click 增益调了等于没调（实测三次不同值输出完全一致）。
+    cur = np.sqrt(((m_l ** 2 + m_r ** 2).mean() / 2)) + 1e-9
+    k = 10 ** (-17.0 / 20) / cur
+    m_l, m_r = m_l * k, m_r * k
+    # 只做软限幅防止削顶，不改变层间比例
+    pk = max(np.abs(m_l).max(), np.abs(m_r).max())
+    if pk > 0.99:
+        g = 0.99 / pk
+        m_l, m_r = np.tanh(m_l * g * 1.02), np.tanh(m_r * g * 1.02)
 
     fo, fi = int(0.8 * SR), int(0.05 * SR)
     for buf in (m_l, m_r):
