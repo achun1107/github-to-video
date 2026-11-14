@@ -21,3 +21,6 @@ engine/fonts/
 # Python 缓存
 __pycache__/
 *.pyc
+
+# 第三方音频（用 tools/get-real-bgm.py 下载）
+audio/bgm/real/
