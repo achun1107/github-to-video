@@ -27,21 +27,35 @@ def main():
             except (IndexError, ValueError):
                 return default
         return default
-    music_gain = opt('--music-gain', 0.14)
+    music_gain = opt('--music-gain', 0.95)
     vo_gain = opt('--vo-gain', 2.6)
+
+    def optp(name, default):
+        if name in sys.argv:
+            try:
+                return Path(sys.argv[sys.argv.index(name) + 1]).resolve()
+            except IndexError:
+                return default
+        return default
+    sc_thr = opt('--sc-thr', 0.06)
+    sc_ratio = opt('--sc-ratio', 3.5)
+    sc_att = opt('--sc-attack', 8)
+    sc_rel = opt('--sc-release', 240)
+    bgm_override = optp('--bgm', None)
+    out_override = optp('--out', None)
     raw = proj / 'renders/raw.mp4'
     if not raw.exists():
         sys.exit('no raw.mp4')
-    bed = proj / 'audio/bgm/edm-cut.wav'
+    bed = bgm_override if bgm_override else (proj / 'audio/bgm/edm-cut.wav')
     if not bed.exists():
         sys.exit('no bgm')
     vo1 = proj / 'audio/vo1.mp3'
     score = proj / 'audio/score.wav'
-    out = proj / 'renders/final.mp4'
+    out = out_override if out_override else (proj / 'renders/final.mp4')
     end = dur(raw)
 
     # 预裁 BGM 到片子长度
-    bed18 = proj / 'audio/bgm/bed18.wav'
+    bed18 = proj / 'audio/bgm' / f'bed_{bed.stem}{int(end)}.wav'
     if not bed18.exists():
         subprocess.run(['ffmpeg', '-y', '-v', 'error', '-i', str(bed), '-t', f'{end:.3f}',
                         '-ar', '48000', '-ac', '2', '-c:a', 'pcm_s16le', str(bed18)], check=True)
@@ -62,7 +76,8 @@ def main():
         f.append(f'[{vo_i}:a]aresample=48000,pan=stereo|c0=c0|c1=c0,highpass=f=110,lowpass=f=4500,'
                  f'volume=3.3,adelay=600|600[vox0];[vox0]asplit=2[voA][voS]')
     # BGM：单层，低音略抬；人声侧链压到底噪
-    duck = ('[mu0][voS]sidechaincompress=threshold=0.010:ratio=12:attack=4:release=320:level_sc=1[mu1];'
+    duck = (f'[mu0][voS]sidechaincompress=threshold={sc_thr}:ratio={sc_ratio}:'
+            f'attack={sc_att}:release={sc_rel}:level_sc=1[mu1];'
             if vo_i is not None else '[mu0]anull[mu1];')
     f.append(f'[1:a]aresample=48000,atrim=0:{end:.3f},asetpts=N/SR/TB,'
              f'volume={music_gain},afade=t=in:st=0:d=0.25,afade=t=out:st={end-0.7:.3f}:d=0.7,'
@@ -85,7 +100,7 @@ def main():
         '-map', '0:v', '-map', '[an]',
         '-c:v', 'copy', '-c:a', 'aac', '-b:a', '160k', '-ar', '48000',
         '-movflags', '+faststart', '-t', f'{end:.3f}', str(out)]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
     if r.returncode != 0:
         sys.exit(r.stderr[-600:])
     print(f'done {out} {dur(out):.2f}s')

@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 chcp 65001 >nul
 echo ==^> 检查 ffmpeg
 where ffmpeg >nul 2>nul || (echo 缺 ffmpeg：winget install ffmpeg && pause && exit /b 1)
