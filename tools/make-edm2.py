@@ -211,6 +211,11 @@ def main():
                                                     (174.6, [174.6, 207.7, 261.6]),
                                                     (233.1, [233.1, 277.2, 349.2])],
                 motif=[19, 15, 12, 15, 19, 22, 19, 15], padbright=3800),
+        5: dict(name='E/Am-104-超燃', bpm=104, chords=[(110.0, [110.0, 130.8, 164.8]),
+                                                      (87.31, [87.31, 110.0, 130.8]),
+                                                      (98.00, [98.0, 123.5, 146.8]),
+                                                      (110.0, [110.0, 138.6, 164.8])],
+                motif=[12, 12, 15, 12, 19, 15, 12, 10], padbright=1800),
         4: dict(name='D/Em-142-柔', bpm=142, chords=[(164.8, [164.8, 196.0, 246.9]),
                                                     (220.0, [220.0, 261.6, 329.6]),
                                                     (130.8, [130.8, 164.8, 196.0]),
@@ -323,6 +328,21 @@ def main():
     for t0 in kick_at:
         add(sub, sub_burst(), t0, SUB)
     sub = _filt(sub, 'lp', 70, order=3)
+
+    # 超燃预设：两倍密度军鼓推进
+    if preset == 5:
+        eighth = beat / 2
+        for k in range(0, int(dur / eighth) + 1):
+            t0 = offset + k * eighth
+            if 1.0 <= t0 <= dur and k % 2 == 1:
+                add(drums, snare(), t0, 0.28)
+        # 每 2 小节一个大冲击
+        b2 = offset
+        while b2 < dur:
+            if b2 > 2.0:
+                add(drums, impact(0.7), b2, 1.1)
+                add(drums, riser(0.45), max(0, b2 - 0.45), 0.55)
+            b2 += bar * 2
 
     # 卡点
     for c in (1.15, 4.05, 8.30, 12.60, 16.60):
